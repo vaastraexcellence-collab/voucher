@@ -1,7 +1,7 @@
 {
-  "name": "mikrotik-voucher-multi-manager",
+  "name": "mikrotik-voucher-tool",
   "version": "1.0.0",
-  "description": "Multi-Router MikroTik Voucher Manager",
+  "description": "Mikrotik Card Reset Tool",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
