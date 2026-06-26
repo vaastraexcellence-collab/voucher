@@ -1,0 +1,96 @@
+const express = require('express');
+const routeros = require('routeros-client');
+const path = require('path');
+const fs = require('fs');
+
+const app = express();
+app.use(express.json());
+app.use(express.static(__dirname));
+
+const DATA_FILE = path.join(__dirname, 'routers.json');
+
+// राउटरको डेटा लोड गर्ने फङ्सन
+function loadRouters() {
+    if (!fs.existsSync(DATA_FILE)) return [];
+    return JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+}
+
+// राउटरको डेटा सेभ गर्ने फङ्सन
+function saveRouters(routers) {
+    fs.writeFileSync(DATA_FILE, JSON.stringify(routers, null, 2));
+}
+
+// राउटर थप्ने API
+app.post('/api/routers', (req, res) => {
+    const routers = loadRouters();
+    const newRouter = req.body;
+    newRouter.id = Date.now().toString();
+    routers.push(newRouter);
+    saveRouters(routers);
+    res.json({ success: true, routers });
+});
+
+// राउटरहरूको सूची तान्ने API
+app.get('/api/routers', (req, res) => {
+    res.json(loadRouters());
+});
+
+// राउटर डिलिट गर्ने API
+app.delete('/api/routers/:id', (req, res) => {
+    let routers = loadRouters();
+    routers = routers.filter(r => r.id !== req.params.id);
+    saveRouters(routers);
+    res.json({ success: true, routers });
+});
+
+// मिकरोटिकमा भौचर खोज्ने र रिसेट गर्ने कम्बाइन्ड API
+app.post('/api/voucher/action', async (req, res) => {
+    const { routerId, voucherCode, action } = req.body;
+    const routers = loadRouters();
+    const routerConfig = routers.find(r => r.id === routerId);
+
+    if (!routerConfig) return res.status(404).json({ error: "Router not found" });
+
+    const connection = new routeros.RouterOSClient({
+        host: routerConfig.host,
+        user: routerConfig.user,
+        password: routerConfig.pass,
+        port: parseInt(routerConfig.port) || 8728,
+        keepalive: false,
+        timeout: 10
+    });
+
+    try {
+        const api = await connection.connect();
+        
+        if (action === 'search') {
+            const users = await api.write('/ip/hotspot/user/print', [?name=${voucherCode}]);
+            if (users.length === 0) {
+                return res.json({ found: false });
+            }
+            const active = await api.write('/ip/hotspot/active/print', [?user=${voucherCode}]);
+            res.json({
+                found: true,
+                user: users[0].name,
+                profile: users[0].profile,
+                limitUptime: users[0]['limit-uptime'] || 'Unlimited',
+                status: active.length > 0 ? 'Online' : 'Offline'
+            });
+        } else if (action === 'reset') {
+            // काउन्टर रिसेट गर्ने वा एक्टिभ सेसन हटाउने कमान्ड
+            await api.write('/ip/hotspot/active/remove', [.id=${voucherCode}]).catch(()=>{});
+            await api.write('/ip/hotspot/user/reset-counters', [.id=${voucherCode}]).catch(()=>{});
+            res.json({ success: true, message: "Counters reset successfully" });
+        }
+        await connection.close();
+    } catch (err) {
+        res.status(500).json({ error: "MikroTik Connection Failed: " + err.message });
+    }
+});
+
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+const port = process.env.PORT || 8081;
+app.listen(port, () => console.log(Server live on port ${port}));

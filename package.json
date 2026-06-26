@@ -1,0 +1,13 @@
+{
+  "name": "mikrotik-voucher-multi-manager",
+  "version": "1.0.0",
+  "description": "Multi-Router MikroTik Voucher Manager",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "routeros-client": "^2.0.0"
+  }
+}

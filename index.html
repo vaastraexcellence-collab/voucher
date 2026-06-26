@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MikroTik Management System</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f0f2f5; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+        .box { background: white; padding: 30px; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); width: 350px; text-align: center; }
+        h2 { color: #2563eb; margin-bottom: 20px; }
+        input, select { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ccc; border-radius: 8px; box-sizing: border-box; }
+        button { background: #2563eb; color: white; border: none; padding: 12px; width: 100%; border-radius: 8px; font-size: 16px; cursor: pointer; font-weight: bold; }
+        .btn-red { background: #ef4444; }
+        .btn-green { background: #10b981; }
+        .hidden { display: none; }
+        .router-card { border: 1px solid #e5e7eb; padding: 15px; border-radius: 8px; margin-bottom: 10px; text-align: left; background: #fafafa; }
+        .info-box { background: #ecfdf5; border-left: 5px solid #10b981; padding: 10px; margin-top: 10px; border-radius: 4px; text-align: left; }
+    </style>
+</head>
+<body>
+
+    <div id="loginPage" class="box">
+        <h2>Admin Login</h2>
+        <input type="text" id="adminUser" placeholder="Username">
+        <input type="password" id="adminPass" placeholder="Password">
+        <button onclick="checkLogin()">Login</button>
+    </div>
+
+    <div id="adminPanel" class="box hidden">
+        <h2>MikroTik Admin Panel</h2>
+        <button class="btn-green" onclick="showAddRouterForm()">+ Add Router</button>
+        <button style="margin-top: 10px;" onclick="goToVoucherTool()">👉 Open Voucher Tool</button>
+        <hr style="margin: 20px 0; border: 0; border-top: 1px solid #eee;">
+        
+        <div id="addRouterForm" class="hidden">
+            <input type="text" id="routerName" placeholder="Name">
+            <input type="text" id="routerHost" placeholder="Host (DDNS / IP)">
+            <input type="text" id="routerPort" placeholder="Port (Default 8728)" value="8728">
+            <input type="text" id="routerUser" placeholder="User">
+            <input type="password" id="routerPass" placeholder="Pass">
+            <button onclick="submitRouter()">Save Router</button>
+        </div>
+
+        <div id="routerList" style="margin-top: 20px;"></div>
+    </div>
+
+    <div id="voucherTool" class="box hidden">
+        <h2>Simple Voucher Tool</h2>
+        <select id="routerSelect" onchange="routerChanged()"></select>
+        <input type="text" id="cardCode" placeholder="Username / Card">
+        
+        <div style="display: flex; gap: 10px;">
+            <button onclick="voucherAction('search')">🔍 Search</button>
+            <button class="btn-red" onclick="voucherAction('reset')">♻️ Reset</button>
+        </div>
+
+        <div id="voucherResult" class="info-box hidden"></div>
+        <button style="margin-top: 15px; background: #6b7280;" onclick="backToAdmin()">Back to Admin</button>
+    </div>
+
+    <script>
+        let savedRouters = [];
+
+        function checkLogin() {
+            // आफ्नो इच्छा अनुसारको एडमिन लगइन पासवर्ड यहाँ राख्नुहोस्
+            if(document.getElementById('adminUser').value === 'admin' && document.getElementById('adminPass').value === 'admin123') {
+                document.getElementById('loginPage').classList.add('hidden');
+                document.getElementById('adminPanel').classList.remove('hidden');
+                fetchRouters();
+            } else {
+                alert('Invalid login credentials!');
+            }
+        }
+
+        function showAddRouterForm() {
+            document.getElementById('addRouterForm').classList.toggle('hidden');
+        }
+
+        async function fetchRouters() {
+            const res = await fetch('/api/routers');
+            savedRouters = await res.json();
+            const list = document.getElementById('routerList');
+            list.innerHTML = '';
+            
+            savedRouters.forEach(r => {
+                list.innerHTML += `
+                    <div class="router-card">
+                        <strong>Name:</strong> ${r.name}<br>
+                        <strong>Host:</strong> ${r.host}<br>
+                        <strong>Port:</strong> ${r.port}<br>
+                        <strong>User:</strong> ${r.user}<br>
+                        <button class="btn-red" style="padding:5px; margin-top:5px; font-size:12px;" onclick="deleteRouter('${r.id}')">Delete</button>
+                    </div>
+                `;
+            });
+        }
+
+        async function submitRouter() {
+            const name = document.getElementById('routerName').value;
+            const host = document.getElementById('routerHost').value;
+            const port = document.getElementById('routerPort').value;
+            const user = document.getElementById('routerUser').value;
+            const pass = document.getElementById('routerPass').value;
+
+            await fetch('/api/routers', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ name, host, port, user, pass })
+            });
+            showAddRouterForm();
+            fetchRouters();
+        }
+
+        async function deleteRouter(id) {
+            await fetch(/api/routers/${id}, { method: 'DELETE' });
+            fetchRouters();
+        }
+
+        function goToVoucherTool() {
+            if(savedRouters.length === 0) return alert('कृपया पहिले एउटा राउटर थप्नुहोस्!');
+            document.getElementById('adminPanel').classList.add('hidden');
+            document.getElementById('voucherTool').classList.remove('hidden');
+            
+            const select = document.getElementById('routerSelect');
+            select.innerHTML = '';
+            savedRouters.forEach(r => {
+                select.innerHTML += <option value="${r.id}">${r.name}</option>;
+            });
+        }
+
+        function backToAdmin() {
+            document.getElementById('voucherTool').classList.add('hidden');
+            document.getElementById('adminPanel').classList.remove('hidden');
+        }
+
+        function routerChanged() {
+            document.getElementById('voucherResult').classList.add('hidden');
+        }
+
+        async function voucherAction(action) {
+            const routerId = document.getElementById('routerSelect').value;
+            const voucherCode = document.getElementById('cardCode').value;
+            const resultBox = document.getElementById('voucherResult');
+
+            if(!voucherCode) return alert('भौचर कोड हाल्नुहोस्!');
+
+            resultBox.classList.remove('hidden');
+            resultBox.innerText = "Processing... Please wait...";
+
+            const res = await fetch('/api/voucher/action', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ routerId, voucherCode, action })
+            });
+            const data = await res.json();
+
+            if(data.error) {
+                resultBox.style.background = '#fde8e8';
+                resultBox.innerText = data.error;
+            } else if(action === 'search') {
+                if(!data.found) {
+                    resultBox.innerText = "❌ User not found";
+                } else {
+                    resultBox.style.background = '#ecfdf5';
+                    resultBox.innerHTML = `
+                        <strong>User:</strong> ${data.user}<br>
+                        <strong>Profile:</strong> ${data.profile}<br>
+                        <strong>Limit:</strong> ${data.limitUptime}<br>
+                        <strong>Status:</strong> ${data.status}
+                    `;
+                }
+            } else if(action === 'reset') {
+                resultBox.style.background = '#ecfdf5';
+                resultBox.innerText = "✅ " + data.message;
+            }
+        }
+    </script>
+</body>
+</html>
